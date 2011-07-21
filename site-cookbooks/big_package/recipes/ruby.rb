@@ -22,7 +22,7 @@ Chef::Log.debug [ node[:ruby] ].inspect + "\n\n!!!\n\n"
 rubygems_target_version = "1.6.2"
 bash "update rubygems to >= " do
   code %Q{ gem update --system }
-  not_if{ `gem update --system`.chomp >= "1.6.2" }
+  not_if{ `gem --version`.chomp >= "1.6.2" }
 end
 
 cookbook_file "/tmp/fuck_you_rubygems.diff" do
