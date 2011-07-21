@@ -103,6 +103,7 @@ module ClusterChef
       bootstrap.config[:distro]         = config[:distro]         || node.cloud.bootstrap_distro
       bootstrap.config[:use_sudo]       = true unless config[:use_sudo] == false
       bootstrap.config[:chef_node_name] = node.fullname
+      bootstrap.config[:chef_attributes] = node[:chef_attributes].to_hash
 
       Chef::Log.debug JSON.pretty_generate(bootstrap.config)
       bootstrap
