@@ -14,6 +14,7 @@ remote_file "/tmp/mx4j.zip" do
   source node[:cassandra][:mx4j_url]
   mode "0644"
   action :create
+  not_if { File.exist?("/tmp/mx4j.zip") }
 end
 
 package "unzip"
