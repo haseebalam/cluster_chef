@@ -38,7 +38,7 @@ hinted_handoff_enabled: <%= conf[:hinted_handoff_enabled] %> #true
 # generated.  After it has been dead this long, hints will be dropped.
 max_hint_window_in_ms: <%= conf[:max_hint_window_in_ms] %> # one hour
 # Sleep this long after delivering each row or row fragment
-hinted_handoff_throttle_delay_in_ms: <%= conf[:hinted_handoff_throttle_delay_in_ms] %>
+hinted_handoff_throttle_delay_in_ms: <%= conf[:hinted_handoff_throttle_delay_in_ms] %> #50
 
 # authentication backend, implementing IAuthenticator; used to identify users
 authenticator: <%=conf[:authenticator] %>  #org.apache.cassandra.auth.AllowAllAuthenticator
@@ -46,14 +46,28 @@ authenticator: <%=conf[:authenticator] %>  #org.apache.cassandra.auth.AllowAllAu
 # authorization backend, implementing IAuthority; used to limit access/provide permissions
 authority: <%= conf[:authority] %>  #org.apache.cassandra.auth.AllowAllAuthority
 
-# any IPartitioner may be used, including your own as long as it is on
-# the classpath.  Out of the box, Cassandra provides
-# org.apache.cassandra.dht.RandomPartitioner
+# The partitioner is responsible for distributing rows (by key) across
+# nodes in the cluster.  Any IPartitioner may be used, including your
+# own as long as it is on the classpath.  Out of the box, Cassandra
+# provides org.apache.cassandra.dht.RandomPartitioner
 # org.apache.cassandra.dht.ByteOrderedPartitioner,
-# org.apache.cassandra.dht.OrderPreservingPartitioner, and
-# org.apache.cassandra.dht.CollatingOrderPreservingPartitioner.
-# (CollatingOPP colates according to EN,US rules, not naive byte
-# ordering.  Use this as an example if you need locale-aware collation.)
+# org.apache.cassandra.dht.OrderPreservingPartitioner (deprecated),
+# and org.apache.cassandra.dht.CollatingOrderPreservingPartitioner
+# (deprecated).
+# 
+# - RandomPartitioner distributes rows across the cluster evenly by md5.
+#   When in doubt, this is the best option.
+# - ByteOrderedPartitioner orders rows lexically by key bytes.  BOP allows
+#   scanning rows in key order, but the ordering can generate hot spots
+#   for sequential insertion workloads.
+# - OrderPreservingPartitioner is an obsolete form of BOP, that stores
+# - keys in a less-efficient format and only works with keys that are
+#   UTF8-encoded Strings.
+# - CollatingOPP colates according to EN,US rules rather than lexical byte
+#   ordering.  Use this as an example if you need custom collation.
+#
+# See http://wiki.apache.org/cassandra/Operations for more on
+# partitioners and token selection.
 partitioner: <%= conf[:partitioner] %> #org.apache.cassandra.dht.RandomPartitioner
 
 # directories where Cassandra should store data on disk.
@@ -72,32 +86,30 @@ saved_caches_directory: <%= conf[:saved_caches_dir] %> #/var/lib/cassandra/saved
 # Size to allow commitlog to grow to before creating a new segment 
 commitlog_rotation_threshold_in_mb: <%= conf[:commitlog_rotation_threshold] %> #128
 
-# commitlog_sync supports the following modes:
-# 
-# batch:
-# In batch mode, Cassandra won't ack writes until the commit log
-# has been fsynced to disk.  But fsyncing each write at once is
-# performance-prohibitive, so instead Cassandra will wait up to
-# commitlog_sync_batch_window_in_ms milliseconds for other writes, before
-# syncing that "batch" at once.  This causes a performance penalty
-# of about 15% when the commitlog is on a separate device, and much more
-# when it shares the same device as the data files.
-#
-# periodic:
-# Writes may be acked immediately (without waiting for the commitlog
-# append) and the CommitLog is simply synced every
-# commitlog_sync_period_in_ms milliseconds.
-#
-# periodic_without_flush:
-# Like periodic, but the commitlog write buffer is only flushed
-# before the sync, so any interruption to the process can be
-# expected to lose some writes.  This is the old 0.6 periodic
-# behavior and will be removed in future versions if testing
-# continues to show no performance benefit over normal periodic.
+# commitlog_sync may be either "periodic" or "batch." 
+# When in batch mode, Cassandra won't ack writes until the commit log
+# has been fsynced to disk.  It will wait up to
+# CommitLogSyncBatchWindowInMS milliseconds for other writes, before
+# performing the sync.
 commitlog_sync: <%= conf[:commitlog_sync] %> #periodic
+
+# the other option is "periodic" where writes may be acked immediately
+# and the CommitLog is simply synced every commitlog_sync_period_in_ms
+# milliseconds.
 commitlog_sync_period_in_ms: <%= conf[:commitlog_sync_period] %> #10000
-# commitlog_sync: batch
-# commitlog_sync_batch_window_in_ms: 10
+
+# any class that implements the SeedProvider interface and has a constructor that takes a Map<String, String> of
+# parameters will do.
+seed_provider:
+    # Addresses of hosts that are deemed contact points. 
+    # Cassandra nodes use this list of hosts to find each other and learn
+    # the topology of the ring.  You must change this if you are running
+    # multiple nodes!
+    - class_name: org.apache.cassandra.locator.SimpleSeedProvider
+      parameters:
+          # seeds is actually a comma-delimited list of addresses.
+          # Ex: "<ip1>,<ip2>,<ip3>"
+          - seeds: "<%= conf[:seeds].join(",") %>"  # "127.0.0.1"
 
 # emergency pressure valve: each time heap usage after a full (CMS)
 # garbage collection is above this fraction of the max, Cassandra will
@@ -124,43 +136,42 @@ flush_largest_memtables_at: <%= conf[:flush_largest_memtables_at] %> # 0.75
 reduce_cache_sizes_at: <%= conf[:reduce_cache_sizes_at] %> # 0.85
 reduce_cache_capacity_to: <%= conf[:reduce_cache_capacity_to] %> # 0.6
 
-# Addresses of hosts that are deemed contact points.
-# Cassandra nodes use this list of hosts to find each other and learn
-# the topology of the ring.  You must change this if you are running
-# multiple nodes!
-seeds:
-<%- conf[:seeds].each do |seed| -%>
-    - <%= seed %>
-<%- end -%>
-
-# Access mode.  mmapped i/o is substantially faster, but only practical on
-# a 64bit machine (which notably does not include EC2 "small" instances)
-# or relatively small datasets.  "auto", the safe choice, will enable
-# mmapping on a 64bit JVM.  Other values are "mmap", "mmap_index_only"
-# (which may allow you to get part of the benefits of mmap on a 32bit
-# machine by mmapping only index files) and "standard".
-# (The buffer size settings that follow only apply to standard,
-# non-mmapped i/o.)
-disk_access_mode: <%= conf[:disk_access_mode ] %> #auto
-
-# Unlike most systems, in Cassandra writes are faster than reads, so
-# you can afford more of those in parallel.  A good rule of thumb is 2
-# concurrent reads per processor core.  Increase ConcurrentWrites to
-# the number of clients writing at once if you enable CommitLogSync +
-# CommitLogSyncDelay. -->
-concurrent_reads: <%= conf[ :concurrent_reads ] %> #8
+# For workloads with more data than can fit in memory, Cassandra's
+# bottleneck will be reads that need to fetch data from
+# disk. "concurrent_reads" should be set to (16 * number_of_drives) in
+# order to allow the operations to enqueue low enough in the stack
+# that the OS and drives can reorder them.
+#
+# On the other hand, since writes are almost never IO bound, the ideal
+# number of "concurrent_writes" is dependent on the number of cores in
+# your system; (8 * number_of_cores) is a good rule of thumb.
+concurrent_reads: <%= conf[ :concurrent_reads ] %> #32
 concurrent_writes: <%= conf[ :concurrent_writes ] %> #32
+
+
+# Total memory to use for memtables.  Cassandra will flush the largest
+# memtable when this much memory is used.  Prefer using this to
+# the older, per-ColumnFamily memtable flush thresholds.
+# If omitted, Cassandra will set it to 1/3 of the heap.
+# If set to 0, only the old flush thresholds are used.
+# memtable_total_space_in_mb: 2048
 
 # This sets the amount of memtable flush writer threads.  These will
 # be blocked by disk io, and each one will hold a memtable in memory
 # while blocked. If you have a large heap and many data directories,
 # you can increase this value for better flush performance.
 # By default this will be set to the amount of data directories defined.
-memtable_flush_writers: <%= conf[:memtable_flush_writers] %> #1
+#
+#memtable_flush_writers: <%= conf[:memtable_flush_writers] %> #1
+
+# the number of full memtables to allow pending flush, that is,
+# waiting for a writer thread.  At a minimum, this should be set to
+# the maximum number of secondary indexes created on a single CF.
+memtable_flush_queue_size: <%= conf[:memtable_flush_queue_size] %> # 4
 
 # Buffer size to use when performing contiguous column slices. 
 # Increase this to the size of the column slices you typically perform
-sliced_buffer_size_in_kb: <%= conf[:sliced_buffer_size ] %> #64
+sliced_buffer_size_in_kb: 64
 
 # TCP port, for commands and data
 storage_port: <%= conf[:storage_port] %> #7000
@@ -189,6 +200,20 @@ rpc_port: <%= conf[:rpc_port] %> #9160
 
 # enable or disable keepalive on rpc connections
 rpc_keepalive: <%= conf[:rpc_keepalive] %> #true
+
+# Cassandra uses thread-per-client for client RPC.  This can
+# be expensive in memory used for thread stack for a large
+# enough number of clients.  (Hence, connection pooling is
+# very, very strongly recommended.)
+# 
+# Uncomment rpc_min|max|thread to set request pool size.
+# You would primarily set max as a safeguard against misbehaved
+# clients; if you do hit the max, Cassandra will block until
+# one disconnects before accepting more.  The defaults are
+# min of 16 and max unlimited.
+#
+# rpc_min_threads: 16
+# rpc_max_threads: 2048
 
 # uncomment to set socket buffer sizes on rpc connections
 # rpc_send_buff_size_in_bytes:
@@ -233,6 +258,23 @@ column_index_size_in_kb: <%= conf[:column_index_size] %> #64
 # will be logged specifying the row key.
 in_memory_compaction_limit_in_mb: <%= conf[:in_memory_compaction_limit] %> #64
 
+# Number of compaction threads. This default to the number of processors,
+# enabling multiple compactions to execute at once. Using more than one
+# thread is highly recommended to preserve read performance in a mixed
+# read/write workload as this avoids sstables from accumulating during long
+# running compactions. The default is usually fine and if you experience
+# problems with compaction running too slowly or too fast, you should look at
+# compaction_throughput_mb_per_sec first.
+# Uncomment to make compaction mono-threaded.
+#concurrent_compactors: 1
+
+# Throttles compaction to the given total throughput across the entire
+# system. The faster you insert data, the faster you need to compact in
+# order to keep the sstable count down, but in general, setting this to
+# 16 to 32 times the rate you are inserting data is more than sufficient.
+# Setting this to 0 disables throttling.
+compaction_throughput_mb_per_sec: 16
+
 # Track cached row keys during compaction, and re-cache their new
 # positions in the compacted sstable.  Disable if you use really large
 # key caches.
@@ -243,7 +285,7 @@ rpc_timeout_in_ms: <%= conf[:rpc_timeout_in_ms] %> #10000
 
 # phi value that must be reached for a host to be marked down.
 # most users should never need to adjust this.
-phi_convict_threshold: <%= conf[:phi_convict_threshold] %> #8
+# phi_convict_threshold: <%= conf[:phi_convict_threshold] %> #8
 
 # endpoint_snitch -- Set this to a class that implements
 # IEndpointSnitch, which will let Cassandra know enough
@@ -325,3 +367,20 @@ request_scheduler: <%= conf[:request_scheduler] %> #org.apache.cassandra.schedul
 #  is for a given SSTable. The larger the sampling, the more effective
 #  the index is at the cost of space.
 index_interval: 128
+
+# Enable or disable inter-node encryption
+# Default settings are TLS v1, RSA 1024-bit keys (it is imperative that
+# users generate their own keys) TLS_RSA_WITH_AES_128_CBC_SHA as the cipher
+# suite for authentication, key exchange and encryption of the actual data transfers.
+# NOTE: No custom encryption options are enabled at the moment
+# The available internode options are : all, none
+#
+# The passwords used in these options must match the passwords used when generating
+# the keystore and truststore.  For instructions on generating these files, see:
+# http://download.oracle.com/javase/6/docs/technotes/guides/security/jsse/JSSERefGuide.html#CreateKeystore
+encryption_options:
+    internode_encryption: none
+    keystore: conf/.keystore
+    keystore_password: cassandra
+    truststore: conf/.truststore
+    truststore_password: cassandra

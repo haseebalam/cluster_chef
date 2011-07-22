@@ -60,11 +60,10 @@ default[:cassandra][:seeds]                         = ["127.0.0.1"]
 default[:cassandra][:java_min_heap]                 = "128M"        # consider setting equal to max_heap in production
 default[:cassandra][:java_max_heap]                 = "1650M"
 default[:cassandra][:java_eden_heap]                = "1500M"
-default[:cassandra][:disk_access_mode]              = "auto"
-default[:cassandra][:concurrent_reads]              = 8             # 2 per core
-default[:cassandra][:concurrent_writes]             = 32            # typical number of clients
+default[:cassandra][:concurrent_reads]              = 32            # see conf.yaml
+default[:cassandra][:concurrent_writes]             = 32            # see conf.yaml
 default[:cassandra][:memtable_flush_writers]        = 1             # see comment in cassandra.yaml.erb
-default[:cassandra][:memtable_flush_after]          = 60
+default[:cassandra][:memtable_flush_queue_size]     = 4             # see comment in cassandra.yaml.erb
 default[:cassandra][:sliced_buffer_size]            = 64            # size of column slices
 default[:cassandra][:thrift_framed_transport]       = 15            # default 15; fixes CASSANDRA-475, but make sure your client is happy (Set to nil for debugging)
 default[:cassandra][:thrift_max_message_length]     = 16
@@ -89,12 +88,13 @@ default[:cassandra][:throttle_limit]                = 80           # 2x (concurr
 default[:cassandra][:request_scheduler_id]          = 'keyspace'
 
 # For install_from_release recipe
-cassversion = "0.7.7"
+cassversion = "0.8.1"
 default[:cassandra][:install_url] = "http://www.eng.lsu.edu/mirrors/apache/cassandra/#{cassversion}/apache-cassandra-#{cassversion}-bin.tar.gz"
 # For install_from_git
 default[:cassandra][:git_repo]                      = 'git://git.apache.org/cassandra.git'
-# until ruby gem is updated, use cdd239dcf82ab52cb840e070fc01135efb512799
-default[:cassandra][:git_revision]                  = 'cdd239dcf82ab52cb840e070fc01135efb512799' # 'HEAD'
+
+# Set this to a revision to checkout
+# default[:cassandra][:git_revision]                = 'cdd239dcf82ab52cb840e070fc01135efb512799' # 'HEAD'
 
 # JNA deb location
 default[:cassandra][:jna_deb_amd64_url] = "http://debian.riptano.com/maverick/pool/libjna-java_3.2.7-0~nmu.2_amd64.deb"

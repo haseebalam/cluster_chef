@@ -31,12 +31,14 @@ template "/etc/cassandra/cassandra.yaml" do
   notifies  :restart, resources(:service => "cassandra")
 end
 
-template "/etc/cassandra/log4j-server.properties" do
-  source    "log4j-server.properties.erb"
-  owner     "root"
-  group     "root"
-  mode      0644
-  notifies  :restart, resources(:service => "cassandra")
+%w{ log4j-server.properties log4j-tools.properties }.each do |lf|
+  template "/etc/cassandra/#{lf}" do
+    source    "#{lf}.erb"
+    owner     "root"
+    group     "root"
+    mode      0644
+    notifies  :restart, resources(:service => "cassandra")
+  end
 end
 
 # have some fraction of the nodes register as a seed with
