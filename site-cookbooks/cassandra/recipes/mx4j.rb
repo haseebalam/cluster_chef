@@ -21,7 +21,7 @@ package "unzip"
 
 bash "unzip_mx4j" do
   code <<EOF
-  unzip -d /usr/local/share /tmp/mx4j.zip
+  unzip -q -d /usr/local/share /tmp/mx4j.zip
 EOF
   not_if {system("ls -d /usr/local/share/mx4j-* > /dev/null")}
 end
