@@ -43,7 +43,7 @@ default[:cassandra][:listen_addr]                   = "localhost"
 default[:cassandra][:storage_port]                  = 7000
 default[:cassandra][:rpc_addr]                      = "localhost"
 default[:cassandra][:rpc_port]                      = 9160
-default[:cassandra][:jmx_port]                      = 12345         # moved from default of 8080 (conflicts with hadoop)
+default[:cassandra][:jmx_port]                      = 7199
 # Partitioning
 default[:cassandra][:auto_bootstrap]                = 'false'
 default[:cassandra][:authenticator]                 = "org.apache.cassandra.auth.AllowAllAuthenticator"
