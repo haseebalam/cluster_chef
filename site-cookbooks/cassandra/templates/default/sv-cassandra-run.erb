@@ -21,6 +21,7 @@ exec chpst -u${CASSANDRA_USER} -e /etc/sv/cassandra/env -o 65535 \
 <%- if false %>
       -ea                                                       \
 <%- end %>
+      -javaagent:$CASSANDRA_HOME/lib/jamm-0.2.2.jar             \
       -XX:+UseThreadPriorities                                  \
       -XX:ThreadPriorityPolicy=42                               \
       -XX:+UseParNewGC                                          \
@@ -33,11 +34,13 @@ exec chpst -u${CASSANDRA_USER} -e /etc/sv/cassandra/env -o 65535 \
 <%-   end %>
 <%- end %>
       -Xss128k                                                  \
-      -XX:SurvivorRatio=4                                       \
-      -XX:MaxTenuringThreshold=8                                \
+      -XX:SurvivorRatio=8                                       \
+      -XX:MaxTenuringThreshold=1                                \
       -XX:TargetSurvivorRatio=70                                \
-      -XX:CMSInitiatingOccupancyFraction=65                     \
+      -XX:CMSInitiatingOccupancyFraction=75                     \
+      -XX:+UseCMSInitiatingOccupancyOnly                        \
       -Dcassandra.compaction.priority=1                         \
+      -Djava.net.preferIPv4Stack=true                           \
 <%- if node[:cassandra][:passwd_use_md5] %>
       -Dpasswd.mode=MD5                                         \
 <%- end %>
