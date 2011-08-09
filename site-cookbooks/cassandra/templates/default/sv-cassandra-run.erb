@@ -39,7 +39,6 @@ exec chpst -u${CASSANDRA_USER} -e /etc/sv/cassandra/env -o 65535 \
       -XX:TargetSurvivorRatio=70                                \
       -XX:CMSInitiatingOccupancyFraction=75                     \
       -XX:+UseCMSInitiatingOccupancyOnly                        \
-      -Dcassandra.compaction.priority=1                         \
       -Djava.net.preferIPv4Stack=true                           \
 <%- if node[:cassandra][:passwd_use_md5] %>
       -Dpasswd.mode=MD5                                         \
